@@ -339,7 +339,7 @@ class OpenAIWrapper:
                 "api_key": os.environ.get("AZURE_OPENAI_API_KEY"),
                 "api_type": "azure",
                 "base_url": os.environ.get("AZURE_OPENAI_API_BASE"),
-                "api_version": "2023-03-15-preview",
+                "api_version": "2024-02-15-preview",
             },
             {
                 "model": "gpt-3.5-turbo",
@@ -361,13 +361,8 @@ class OpenAIWrapper:
         if logging_enabled():
             log_new_wrapper(self, locals())
         openai_config, extra_kwargs = self._separate_openai_config(base_config)
-        # This *may* work if the `llm_config` has specified the `model` attribute,
-        # so just warn here.
-        if type(config_list) is list and len(config_list) == 0:
-            logger.warning("OpenAI client was provided with an empty config_list, which may not be intended.")
-            # If the `llm_config` has no `model` then the call will fail. Abort now.
-            if "model" not in extra_kwargs:
-                raise ValueError("Please specify a value for the 'model' in 'llm_config'.")
+        # It's OK if "model" is not provided in base_config or config_list
+        # Because one can provide "model" at `create` time.
 
         self._clients: List[ModelClient] = []
         self._config_list: List[Dict[str, Any]] = []
@@ -375,13 +370,6 @@ class OpenAIWrapper:
         if config_list:
             config_list = [config.copy() for config in config_list]  # make a copy before modifying
             for config in config_list:
-                # We require that each element of `config_list` has a non-empty value
-                # for `model` specified unless `extra_kwargs` contains "model".
-                model = None
-                if "model" in config:
-                    model = config["model"]
-                if "model" not in extra_kwargs and (model is None or len(model) == 0):
-                    raise ValueError("Please specify a non-empty 'model' value for every item in 'config_list'.")
                 self._register_default_client(config, openai_config)  # could modify the config
                 self._config_list.append(
                     {**extra_kwargs, **{k: v for k, v in config.items() if k not in self.openai_kwargs}}
@@ -546,7 +534,7 @@ class OpenAIWrapper:
         ```
 
             - allow_format_str_template (bool | None): Whether to allow format string template in the config. Default to false.
-            - api_version (str | None): The api version. Default to None. E.g., "2023-08-01-preview".
+            - api_version (str | None): The api version. Default to None. E.g., "2024-02-15-preview".
         Raises:
             - RuntimeError: If all declared custom model clients are not registered
             - APIError: If any model client create call raises an APIError
@@ -610,6 +598,7 @@ class OpenAIWrapper:
 
                         if logging_enabled():
                             # Log the cache hit
+                            # TODO: log the config_id and pass_filter etc.
                             log_chat_completion(
                                 invocation_id=invocation_id,
                                 client_id=id(client),
@@ -671,6 +660,7 @@ class OpenAIWrapper:
                         cache.set(key, response)
 
                 if logging_enabled():
+                    # TODO: log the config_id and pass_filter etc.
                     log_chat_completion(
                         invocation_id=invocation_id,
                         client_id=id(client),
